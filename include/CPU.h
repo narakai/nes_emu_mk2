@@ -63,13 +63,28 @@ private:
     int m_cycles;
 
     //Registers
-    Address r_PC;    /* Program Counter */
-    Byte r_SP;       /* Stack Pointer */
-    Byte r_A;        /* Accumulator */
-    Byte r_X;        /* index Reg X */
-    Byte r_Y;        /* index Reg Y */
+    Address r_PC;    /* Program Counter */ /*存储下一条将要执行的指令的内存地址*/
+    Byte r_SP;       /* Stack Pointer */ /*保存寄存器的值、局部变量以及其他需要临时存储的数据*/
+    Byte r_A;        /* Accumulator_ */  /*执行算术和逻辑操作*/
+    Byte r_X;        /* index Reg X */ /*数据移动、索引计算和循环等操作*/
+    Byte r_Y;        /* index Reg Y */ /*数据移动、索引计算和循环等操作*/
 
     /* Processor Status Reg */
+    //通过检查和设置状态寄存器的不同标志位，程序可以根据运算结果进行条件判断、流程控制和错误处理
+
+    /// # Status Register (P) http://wiki.nesdev.com/w/index.php/Status_flags
+///
+///  7 6 5 4 3 2 1 0
+///  N V _ B D I Z C
+///  | |   | | | | +--- Carry Flag
+///  | |   | | | +----- Zero Flag
+///  | |   | | +------- Interrupt Disable
+///  | |   | +--------- Decimal Mode (not used on NES)
+///  | |   +----------- Break Command
+///  | +--------------- Overflow Flag
+///  +----------------- Negative Flag
+///
+
     bool f_C;         /* Carry */
     bool f_Z;         /* Zero */
     bool f_I;         /* IRQ disable */

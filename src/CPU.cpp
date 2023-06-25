@@ -6,31 +6,38 @@
 #include "../include/CPUOpcodes.h"
 #include "../include/MainBus.h"
 #include "../include/Log.h"
+/* CPU 6502 */
 
-/// # Status Register (P) http://wiki.nesdev.com/w/index.php/Status_flags
-///
-///  7 6 5 4 3 2 1 0
-///  N V _ B D I Z C
-///  | |   | | | | +--- Carry Flag
-///  | |   | | | +----- Zero Flag
-///  | |   | | +------- Interrupt Disable
-///  | |   | +--------- Decimal Mode (not used on NES)
-///  | |   +----------- Break Command
-///  | +--------------- Overflow Flag
-///  +----------------- Negative Flag
-///
+/*
+参考：中文版 http://nesdev.com/nes_c.txt
+     英文版： http://fms.komkon.org/EMUL8/NES.html
+CPU Memory Map
+--------------------------------------- $10000
+ Upper Bank of Cartridge ROM            卡带的上层ROM
+--------------------------------------- $C000
+ Lower Bank of Cartridge ROM            卡带的下层ROM
+--------------------------------------- $8000
+ Cartridge RAM (maybe battery-backed)  卡带的RAM（可能有电池支持）
+--------------------------------------- $6000
+ Expansion Modules                      扩充的模块
+--------------------------------------- $5000
+ Input/Output                           输入/输出
+--------------------------------------- $2000
+ 2kB Internal RAM, mirrored 4 times     2KB的内部RAM，做4次镜象
+--------------------------------------- $0000
+*/
 
 // & 取值操作，取mask为1的位
-// ｜ 赋值操作，设mask为0的位
+// ｜ 赋值操作
 
-const auto CARRY = 0b00000001;
-const auto ZERO = 0b00000010;
-const auto INTERRUPT_DISABLE = 0b00000100;
-const auto DECIMAL_MODE = 0b00001000;
+const auto CARRY = 0b00000001; //0x1
+const auto ZERO = 0b00000010; //0x2
+const auto INTERRUPT_DISABLE = 0b00000100; //0x4
+const auto DECIMAL_MODE = 0b00001000; //0x8
 const auto BREAK = 0b00010000;
 const auto BREAK2 = 0b00100000;
-const auto OVERFLOW1 = 0b01000000;
-const auto NEGATIVE = 0b10000000;
+const auto OVERFLOW1 = 0b01000000; //0x40
+const auto NEGATIVE = 0b10000000; //0x80
 
 /* CPU 6502 */
 CPU::CPU(MainBus &mem) : m_bus(mem) {}
@@ -68,7 +75,7 @@ void CPU::Step() {
     Byte opcode = m_bus.Read(r_PC++);
     auto CycleLength = OperationCycles[opcode];
     if (CycleLength && (ExecuteImplied(opcode) || ExecuteBranch(opcode) ||
-                        ExecuteType1(opcode) || ExecuteType2(opcode))) {
+                        ExecuteType0(opcode) || ExecuteType1(opcode) || ExecuteType2(opcode))) {
         m_skipCycles += CycleLength;
     } else {
         LOG(Error) << "Unrecognized opcode: " << std::hex << +opcode << std::endl;
@@ -185,7 +192,7 @@ bool CPU::ExecuteImplied(Byte opcode) {
             SetZN(r_X);
             break;
         case TAY:
-            // Transfer Accumulator to Index Y
+            // Transfer Accumulator_ to Index Y
             r_Y = r_A;
             SetZN(r_Y);
             break;
@@ -212,7 +219,7 @@ bool CPU::ExecuteImplied(Byte opcode) {
             f_I = true;
             break;
         case TYA:
-            // Transfer Index Y to Accumulator
+            // Transfer Index Y to Accumulator_
             r_A = r_Y;
             SetZN(r_A);
             break;
@@ -240,23 +247,385 @@ bool CPU::ExecuteImplied(Byte opcode) {
             r_X = r_SP;
             SetZN(r_X);
             break;
+        default:
+            return false;
     }
     return true;
 }
 
+//The conditional branch instructions all have the form xxy10000.
+//The flag indicated by xx is compared with y, and the branch is taken if they are equal.
+//
+//xx	flag
+//00	negative
+//01	overflow
+//10	carry
+//11	zero
+
 bool CPU::ExecuteBranch(Byte opcode) {
+    // 跳转指令实现
+    if ((opcode & BranchInstructionMask) == BranchInstructionMaskResult) {
+        //branch is initialized to the condition required (for the flag specified later)
+        bool branch = opcode & BranchConditionMask;
+
+        //set branch to true if the given condition is met by the given flag
+        //We use xnor here, it is true if either both operands are true or false
+        switch (opcode >> BranchOnFlagShift) {
+            case Negative:
+                // opcode = 0x10 为BPL指令 在获得 高位为1时才跳转
+                // 在马里奥游戏中前二十条指令存在 LDA 2020 , BPL 0xFB指令
+                // 0xF8 解释为 -5，LDA指令为4字长，所以PC会再次跳转到 LDA 2002上
+                // 也就是说必须等待PPU为vblank时才开始执行下一条指令
+                branch = !(branch ^ f_N);
+                break;
+            case Overflow:
+                branch = !(branch ^ f_V);
+                break;
+            case Carry:
+                branch = !(branch ^ f_C);
+                break;
+            case Zero:
+                branch = !(branch ^ f_Z);
+                break;
+            default:
+                return false;
+        }
+        if (branch) {
+            int8_t offset = m_bus.Read(r_PC++);
+            ++m_skipCycles;
+            auto newPC = static_cast<Address>(r_PC + offset);
+            SetPageCrossed(r_PC, newPC, 2);
+            r_PC = newPC;
+        } else {
+            ++r_PC;
+        }
+        return true;
+    }
     return false;
 }
 
+//the cc = 00 instructions
+//https://happysoul.github.io/nes/6502/
+//https://www.masswerk.at/6502/6502_instruction_set.html
 bool CPU::ExecuteType0(Byte opcode) {
+    if ((opcode & InstructionModeMask) == 0x0) {
+        //先寻址
+        Address location = 0;
+        // if (opcode == DEBUG_OPCODE)
+        // {
+        //     LOG(Info) << "Fetch Instruction :" << std::hex << static_cast<int>(DEBUG_OPCODE) << std::endl;
+        // }
+        switch (static_cast<AddressingMode2>((opcode & AddrModeMask) >> AddrModeShift)) {
+            case Immediate_:
+                location = r_PC++;
+                break;
+            case ZeroPage_:
+                location = m_bus.Read(r_PC++);
+                break;
+            case Accumulator_:
+                break;
+            case Absolute_:
+                location = ReadAddress(r_PC);
+                r_PC += 2;
+                break;
+            case ZeroPageX_:
+                // Address wraps around in the zero page
+                location = (m_bus.Read(r_PC++) + r_X) & 0xff;
+                break;
+            case AbsoluteX_:
+                location = ReadAddress(r_PC);
+                r_PC += 2;
+                SetPageCrossed(location, location + r_X);
+                location += r_X;
+                break;
+            default:
+                return false;
+        }
+
+        std::uint16_t operand = 0;
+        switch (static_cast<Operation0>((opcode & OperationMask) >> OperationShift)) {
+
+            case BIT:
+                // bits 7 and 6 of operand are transfered to bit 7 and 6 of SR (N,V);
+                // the zero-flag is set to the result of operand AND accumulator.
+                operand = m_bus.Read(location);
+                f_Z = !(r_A & operand);
+                f_V = operand & OVERFLOW1;
+                f_N = operand & NEGATIVE;
+                break;
+            case STY:
+                m_bus.Write(location, r_Y);
+                break;
+            case LDY:
+                r_Y = m_bus.Read(location);
+                SetZN(r_Y);
+                break;
+            case CPY: {
+                std::uint16_t diff = r_Y - m_bus.Read(location);
+                f_C = !(diff & 0x100);
+                SetZN(diff);
+            }
+                break;
+            case CPX: {
+                std::uint16_t diff = r_X - m_bus.Read(location);
+                f_C = !(diff & 0x100);
+                SetZN(diff);
+            }
+                break;
+            default:
+                return false;
+        }
+
+        return true;
+    }
     return false;
 }
 
+//the cc = 01 instructions
 bool CPU::ExecuteType1(Byte opcode) {
+    if ((opcode & InstructionModeMask) == 0x1) {
+        //first 寻址
+        Address location = 0;
+        auto op = static_cast<Operation1>((opcode & OperationMask) >> OperationShift);
+
+        switch (static_cast<AddressingMode1>(
+                (opcode & AddrModeMask) >> AddrModeShift)) {
+
+            case ZeroPageX0: {
+                Byte zero_addr = r_X + m_bus.Read(r_PC++);
+                //Addresses wrap in zero page mode, thus pass through a mask
+                location = m_bus.Read(zero_addr & 0xff) | m_bus.Read((zero_addr + 1) & 0xff) << 8;
+            }
+                break;
+            case ZeroPage:
+                location = m_bus.Read(r_PC++);
+                break;
+            case Immediate:
+                location = r_PC++;
+                break;
+            case Absolute:
+                location = ReadAddress(r_PC);
+                r_PC += 2;
+                break;
+            case ZeroPageY: {
+                Byte zero_addr = m_bus.Read(r_PC++);
+                location = m_bus.Read(zero_addr & 0xff) | m_bus.Read((zero_addr + 1) & 0xff) << 8;
+                if (op != STA)
+                    SetPageCrossed(location, location + r_Y);
+                location += r_Y;
+            }
+                break;
+            case ZeroPageX:
+                // Address wraps around in the zero page
+                location = (m_bus.Read(r_PC++) + r_X) & 0xff;
+                break;
+            case AbsoluteY:
+                location = ReadAddress(r_PC);
+                r_PC += 2;
+                if (op != STA)
+                    SetPageCrossed(location, location + r_Y);
+                location += r_Y;
+                break;
+            case AbsoluteX:
+                location = ReadAddress(r_PC);
+                r_PC += 2;
+                if (op != STA)
+                    SetPageCrossed(location, location + r_X);
+                location += r_X;
+                break;
+            default:
+                return false;
+        }
+
+        switch (op) {
+
+            case ORA:
+                r_A = m_bus.Read(location) | r_A;
+                SetZN(r_A);
+                break;
+            case AND:
+                r_A = m_bus.Read(location) & r_A;
+                SetZN(r_A);
+                break;
+            case EOR:
+                r_A = m_bus.Read(location) ^ r_A;
+                SetZN(r_A);
+                break;
+            case ADC: {
+                Byte operand = m_bus.Read(location);
+                std::uint16_t sum = r_A + operand + f_C;
+                //Carry forward or UNSIGNED overflow
+                f_C = sum & 0x100;
+                //SIGNED overflow, would only happen if the sign of sum is
+                //different from BOTH the operands
+                f_V = (r_A ^ sum) & (operand ^ sum) & NEGATIVE;
+                r_A = static_cast<Byte>(sum);
+                SetZN(r_A);
+            }
+                break;
+            case STA:
+                m_bus.Write(location, r_A);
+                break;
+            case LDA:
+                r_A = m_bus.Read(location);
+                SetZN(r_A);
+//                LOG(Info) << "LDA: "
+//                          << std::hex
+//                          << static_cast<int>(location)
+//                          << "\t R_A IS "
+//                          << std::hex
+//                          << static_cast<int>(r_A)
+//                          << std::endl;
+                break;
+            case CMP: {
+                std::uint16_t diff = r_A - m_bus.Read(location);
+                f_C = !(diff & 0x100);
+                SetZN(diff);
+            }
+                break;
+            case SBC:
+                // Subtract Memory from Accumulator with Borrow
+            {
+                //High carry means "no borrow", thus negate and subtract
+                std::uint16_t subtrahend = m_bus.Read(location);
+                std::uint16_t diff = r_A - subtrahend - !f_C;
+                //if the ninth bit is 1, the resulting number is negative => borrow => low carry
+                f_C = !(diff & 0x100);
+                //Same as ADC, except instead of the subtrahend,
+                //substitute with it's one complement
+                f_V = (r_A ^ diff) & (~subtrahend ^ diff) & NEGATIVE;
+                r_A = diff;
+                SetZN(diff);
+            }
+                break;
+            default:
+                return false;
+        }
+        return true;
+    }
     return false;
 }
 
+//the cc = 10 instructions
 bool CPU::ExecuteType2(Byte opcode) {
+    if ((opcode & InstructionModeMask) == 0x2) {
+        //first 寻址
+        Address location = 0;
+        auto op = static_cast<Operation2>((opcode & OperationMask) >> OperationShift);
+        auto addr_mode =
+                static_cast<AddressingMode2>((opcode & AddrModeMask) >> AddrModeShift);
+        switch (addr_mode) {
+            case Immediate_:
+                location = r_PC++;
+                break;
+            case ZeroPage_:
+                location = m_bus.Read(r_PC++);
+                break;
+            case Accumulator_:
+                break;
+            case Absolute_:
+                location = ReadAddress(r_PC);
+                r_PC += 2;
+                break;
+            case ZeroPageX_:
+                // Address wraps around in the zero page
+            {
+                location = m_bus.Read(r_PC++);
+                Byte index;
+                if (op == LDX || op == STX)
+                    index = r_Y;
+                else
+                    index = r_X;
+                //The mask wraps address around zero page
+                location = (location + index) & 0xff;
+            }
+                break;
+            case AbsoluteX_: {
+                location = ReadAddress(r_PC);
+                r_PC += 2;
+                Byte index;
+                if (op == LDX || op == STX)
+                    index = r_Y;
+                else
+                    index = r_X;
+                SetPageCrossed(location, location + index);
+                location += index;
+            }
+                break;
+            default:
+                return false;
+        }
+
+        std::uint16_t operand = 0;
+        switch (op) {
+            case ASL:
+            case ROL:
+                if (addr_mode == Accumulator_) {
+                    //update r_A
+                    //将当前的进位标志位 (f_C) 保存到变量 prev_C 中
+                    auto prev_C = f_C;
+                    //将进位标志位 (f_C) 设置为寄存器 A 的最高位 (bit 7)
+                    f_C = r_A & NEGATIVE;
+                    //将寄存器 A 左移一位，相当于将其每个位向左移动一位，最低位 (bit 0) 填充为 0
+                    r_A <<= 1;
+                    //如果操作 (op) 是循环左移 (ROL)，将最低位 (bit 0) 设置为先前保存的进位标志位 (prev_C) 的值。
+                    r_A = r_A | (prev_C && (op == ROL));
+                    //根据寄存器 A 的新值，设置零标志位 (Zero Flag，标志位 Z) 和负标志位 (Negative Flag，标志位 N)
+                    SetZN(r_A);
+                } else {
+                    //update operand
+                    auto prev_C = f_C;
+                    operand = m_bus.Read(location);
+                    f_C = operand & NEGATIVE;
+                    operand = operand << 1 | (prev_C && (op == ROL));
+                    SetZN(operand);
+                    m_bus.Write(location, operand);
+                }
+                break;
+            case LSR:
+            case ROR:
+                if (addr_mode == Accumulator_) {
+                    //update r_A
+                    auto prev_C = f_C;
+                    f_C = r_A & CARRY;
+                    r_A >>= 1;
+                    //If Rotating, set the bit-7 to the previous carry
+                    r_A = r_A | (prev_C && (op == ROR)) << 7;
+                    SetZN(r_A);
+                } else {
+                    //update operand
+                    auto prev_C = f_C;
+                    operand = m_bus.Read(location);
+                    f_C = operand & CARRY;
+                    operand = operand >> 1 | (prev_C && (op == ROL)) << 7;
+                    SetZN(operand);
+                    m_bus.Write(location, operand);
+                }
+                break;
+            case STX:
+                m_bus.Write(location, r_X);
+                break;
+            case LDX:
+                r_X = m_bus.Read(location);
+                SetZN(r_X);
+                break;
+            case DEC: {
+                auto tmp = m_bus.Read(location) - 1;
+                SetZN(tmp);
+                m_bus.Write(location, tmp);
+            }
+                break;
+            case INC: {
+                auto tmp = m_bus.Read(location) + 1;
+                SetZN(tmp);
+                m_bus.Write(location, tmp);
+            }
+                break;
+            default:
+                return false;
+        }
+        return true;
+    }
     return false;
 }
 

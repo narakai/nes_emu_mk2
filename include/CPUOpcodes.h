@@ -5,8 +5,15 @@
 #ifndef NES_EMU_CPUOPCODES_H
 #define NES_EMU_CPUOPCODES_H
 
+//https://llx.com/Neil/a2/opcodes.html
+//Most instructions that explicitly reference memory locations have bit patterns of the form aaabbbcc.
+//The aaa and cc bits determine the opcode, and the bbb bits determine the addressing mode.
+
+// 0000 0011
 const auto InstructionModeMask = 0x3;
 
+// 1110 0000
+//前3位（位7到位5）表示操作码（OPCode），用于指示要执行的具体操作。
 const auto OperationMask = 0xe0;
 const auto OperationShift = 5;
 
@@ -14,11 +21,15 @@ const auto OperationShift = 5;
  * 操作码的哪几位指定了寻址方式？
  * datasheet中16x16的表格每一列的寻址方式是相同的
 */
+// 0001 1100
 const auto AddrModeMask = 0x1c;
 const auto AddrModeShift = 2;
 
+// 0001 1111
 const auto BranchInstructionMask = 0x1f;
+// 0001 0000
 const auto BranchInstructionMaskResult = 0x10;
+// 0010 0000
 const auto BranchConditionMask = 0x20;
 const auto BranchOnFlagShift = 6;
 
@@ -36,6 +47,8 @@ enum BranchOnFlag {
 /*
  * 指令集声明
 */
+
+// ORA默认0，依次递增，LDA为5(0101)
 enum Operation1 {
     ORA, /* 'OR' memory with ACC */
     AND,
@@ -87,13 +100,14 @@ enum OperationImplied {
     TAX = 0xaa,
     TSX = 0xba,
 };
+
 enum AddressingMode1 {
-    IndexedIndirectX,
+    ZeroPageX0,
     ZeroPage,
     Immediate, /* 立即数寻址 */
     Absolute,  /* 绝对地址寻址 */
-    IndirectY, /* 寄存器间接寻址 */
-    IndexedX,  /* 寄存器间接寻址 */
+    ZeroPageY, /* 寄存器间接寻址 */
+    ZeroPageX,  /* 寄存器间接寻址 */
     AbsoluteY,
     AbsoluteX,
 };
@@ -112,10 +126,10 @@ enum Operation2 {
 enum AddressingMode2 {
     Immediate_,
     ZeroPage_,
-    Accumulator,
+    Accumulator_,
     Absolute_,
-    Indexed = 5,
-    AbsoluteIndexed = 7,
+    ZeroPageX_ = 5,
+    AbsoluteX_ = 7,
 };
 
 enum Operation0 {
