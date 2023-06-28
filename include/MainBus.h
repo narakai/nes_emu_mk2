@@ -6,11 +6,14 @@
 #define NES_EMU_MAINBUS_H
 
 #include "Chip.h"
+#include "Cartridge.h"
 #include <vector>
 
 class MainBus {
 public:
     MainBus();
+
+    MainBus(Cartridge &cartridge);
 
     Byte Read(Address addr);
 
@@ -21,6 +24,7 @@ private:
     std::vector<Byte> m_RAM;
     //扩展内存
     std::vector<Byte> m_extRAM;
+    Cartridge cartridge;
 };
 
 

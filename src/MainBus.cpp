@@ -2,12 +2,19 @@
 // Created by lai leon on 9/6/2023.
 //
 #include "../include/MainBus.h"
+#include <iostream>
 
 /*  0x800 = 2KB */
 // memory 2KB
 MainBus::MainBus() : m_RAM(0x800, 0) {
 
 }
+
+MainBus::MainBus(Cartridge &cartridge) :
+        m_RAM(0x800, 0), cartridge(cartridge) {
+
+}
+
 
 Byte MainBus::Read(Address addr) {
     /* 0x2000 =  8KB RAM  */
@@ -17,6 +24,13 @@ Byte MainBus::Read(Address addr) {
         //将 addr 的高位清零，只保留低 11 位的值。因为这段代码实际上是模拟了一个只有 2KB（0x800）大小的 RAM，
         // 通过 addr & 0x7ff 可以确保地址范围在 0 到 2047 之间
         return m_RAM[addr & 0x7ff];
+    }
+
+    //$8000以上地址为卡带
+    if (addr >= 0x8000) {
+        Byte val = cartridge.GetROM()[addr - 0x8000];
+        std::cout << "MainBus Read a Byte: " << std::hex << static_cast<int>(val) << std::endl;
+        return val;
     }
 
     return 0;
