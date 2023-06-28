@@ -4,6 +4,10 @@
 #include "../include/Log.h"
 
 int main() {
+    //log setting
+    Log::get().setLogStream(std::cout);
+    Log::get().setLevel(Info);
+
     Cartridge cartridge;
     cartridge.LoadFromFile("./rom/example.nes");
     std::cout << "cartridge rom size "
