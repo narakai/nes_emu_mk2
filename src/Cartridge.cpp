@@ -7,6 +7,36 @@
 #include "../include/Log.h"
 
 
+//0-3: Constant $4E $45 $53 $1A ("NES" followed by MS-DOS end-of-file)
+//4: Size of PRG ROM in 16 KB units
+//5: Size of CHR ROM in 8 KB units (Value 0 means the board uses CHR RAM)
+//6: Flags 6 - Mapper, mirroring, battery, trainer
+//7: Flags 7 - Mapper, VS/Playchoice, NES 2.0
+//8: Flags 8 - PRG-RAM size (rarely used extension)
+//9: Flags 9 - TV system (rarely used extension)
+//10: Flags 10 - TV system, PRG-RAM presence (unofficial, rarely used extension)
+//11-15: Unused padding (should be filled with zero, but some rippers put their name across bytes 7-15)
+//
+//Flag6的具体含义如下：
+//76543210
+//||||||||
+//|||||||+- 镜像位: 0: 水平 1：垂直。 游戏是横版还是纵版
+//||||||+-- 1: 卡带包含电池供电的RAM($6000-7FFF)或其他持久性存储介质
+//|||||+--- 1: trainer 标志位，可不管
+//||||+---- 1: 忽略镜像控制或上述的镜像位；而是提供四屏VRAM。由于 NES 的显存只有2kb, 只能支持2屏幕. 如果卡带自带了额外的显存就可以利用4屏幕了
+//++++----- Mapper号的低四位
+//
+//        Flag7的具体含义如下：
+//76543210
+//||||||||
+//|||||||+- VS Unisystem
+//||||||+-- PlayChoice-10 (8KB of Hint Screen data stored after CHR data)
+//||||++--- If equal to 2, flags 8-15 are in NES 2.0 format
+//++++----- Mapper编号的高四位
+//```
+//
+//Flags6的高四位记录了mapper number的低四位，Flags7的高四位记录了mapper number的高四位。
+
 Cartridge::Cartridge() {
 
 }

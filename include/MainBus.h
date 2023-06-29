@@ -13,7 +13,7 @@ class MainBus {
 public:
     MainBus();
 
-    MainBus(Cartridge &cartridge);
+//    MainBus(Cartridge &cartridge);
 
     Byte Read(Address addr);
 

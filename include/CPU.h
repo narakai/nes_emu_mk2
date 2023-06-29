@@ -32,7 +32,7 @@ public:
     Address GetPC() { return r_PC; }
 
     // 仅为测试CPU是否正常工作才开放这个接口
-    Byte GetACC() { return r_A; }
+//    Byte GetACC() { return r_A; }
 
 private:
     MainBus &m_bus;

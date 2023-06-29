@@ -10,10 +10,10 @@ MainBus::MainBus() : m_RAM(0x800, 0) {
 
 }
 
-MainBus::MainBus(Cartridge &cartridge) :
-        m_RAM(0x800, 0), cartridge(cartridge) {
-
-}
+//MainBus::MainBus(Cartridge &cartridge) :
+//        m_RAM(0x800, 0), cartridge(cartridge) {
+//
+//}
 
 
 Byte MainBus::Read(Address addr) {
