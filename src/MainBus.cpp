@@ -1,7 +1,8 @@
 //
 // Created by lai leon on 9/6/2023.
 //
-#include "../include/MainBus.h"
+#include <MainBus.h>
+#include <Log.h>
 #include <iostream>
 
 /*  0x800 = 2KB */
@@ -28,9 +29,9 @@ Byte MainBus::Read(Address addr) {
 
     //$8000以上地址为卡带
     if (addr >= 0x8000) {
-        Byte val = cartridge.GetROM()[addr - 0x8000];
-        std::cout << "MainBus Read a Byte: " << std::hex << static_cast<int>(val) << std::endl;
-        return val;
+//        Byte val = cartridge.GetROM()[addr - 0x8000];
+//        std::cout << "MainBus Read a Byte: " << std::hex << static_cast<int>(val) << std::endl;
+//        return val;
     }
 
     return 0;
@@ -40,5 +41,19 @@ void MainBus::Write(Address addr, Byte val) {
     if (addr < 0x2000) {
         m_RAM[addr & 0x7ff] = val;
     }
+}
+
+bool MainBus::SetMapper(Mapper *mapper) {
+    m_mapper = mapper;
+
+    if (!mapper) {
+        LOG(Error) << "Mapper pointer is nullptr" << std::endl;
+        return false;
+    }
+
+    if (mapper->HasExtendedRAM())
+        m_extRAM.resize(0x2000);
+
+    return true;
 }
 

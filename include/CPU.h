@@ -5,7 +5,7 @@
 #ifndef NES_EMU_CPU_H
 #define NES_EMU_CPU_H
 
-#include "MainBus.h"
+#include <MainBus.h>
 
 //Program Counter
 //

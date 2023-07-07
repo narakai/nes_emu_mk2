@@ -2,10 +2,9 @@
 // Created by lai leon on 9/6/2023.
 //
 #include <ios>
-#include "../include/CPU.h"
-#include "../include/CPUOpcodes.h"
-#include "../include/MainBus.h"
-#include "../include/Log.h"
+#include <CPU.h>
+#include <CPUOpcodes.h>
+#include <Log.h>
 /* CPU 6502 */
 
 /*

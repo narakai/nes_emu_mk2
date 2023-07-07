@@ -30,9 +30,19 @@ public:
 
     const std::vector<Byte> &GetVROM();
 
+    bool HasExtendedRAM();
+
+    Byte GetMapper();
+
+    Byte GetNameTableMirroring();
+
 private:
-    std::vector<Byte> m_PRG_ROM; // 存放 NES 程序数据
-    std::vector<Byte> m_CHR_ROM; // 存放了 NES 图像数据
+    std::vector<Byte> m_PRG_ROM; // PRG (Program)：PRG是指程序存储区域，它存放着游戏的程序代码和执行逻辑。
+    std::vector<Byte> m_CHR_ROM; // CHR (Character)：CHR是指图像数据存储区域，它存放着游戏的图像和图形资源。
+
+    Byte m_nameTableMirroring;
+    Byte m_mapperNumber;            // mapper号 最基础为0
+    bool m_extendedRAM;             // 卡带中是否存在扩展RAM
 };
 
 
