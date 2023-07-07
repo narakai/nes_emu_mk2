@@ -3,11 +3,21 @@ project(NES_emu)
 
 set(CMAKE_CXX_STANDARD 11)
 
-# 设置包含路径
-include_directories(./include)
+# 设置源文件目录
+file(GLOB SOURCES src/*.cpp)
 
-# 设置工作目录
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+# 设置头文件目录
+include_directories(include)
+
+# 设置 SFML 相关的头文件和库目录
+set(SFML_INCLUDE_DIR /opt/homebrew/Cellar/sfml/2.5.1_2/include)
+set(SFML_LIBRARY_DIR /opt/homebrew/Cellar/sfml/2.5.1_2/lib)
+
+# 查找 SFML 库
+find_package(SFML 2.5.1 COMPONENTS graphics window system REQUIRED)
 
 # 添加可执行文件
-add_executable(NES_emu src/main.cpp include/Chip.h include/MainBus.h include/CPU.h include/CPUOpcodes.h src/CPU.cpp src/MainBus.cpp src/Log.cpp include/Log.h src/Cartridge.cpp include/Cartridge.h src/Mapper.cpp include/Mapper.h src/MapperNROM.cpp include/MapperNROM.h src/Emulator.cpp include/Emulator.h)
+add_executable(NES_emu ${SOURCES})
+
+# 链接 SFML 库
+target_link_libraries(NES_emu PRIVATE sfml-graphics sfml-window sfml-system)
