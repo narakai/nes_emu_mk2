@@ -42,7 +42,7 @@ public:
     virtual Byte ReadCHR(Address addr) = 0;
 
     //默认有实现，非纯虚函数，不用 '= 0'
-    virtual NameTableMirroring getNameTableMirroring();
+    virtual NameTableMirroring GetNameTableMirroring();
 
     bool inline HasExtendedRAM() {
         return m_cartridge.HasExtendedRAM();

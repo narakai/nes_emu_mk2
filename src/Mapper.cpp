@@ -5,7 +5,7 @@
 #include <Mapper.h>
 #include <MapperNROM.h>
 
-NameTableMirroring Mapper::getNameTableMirroring() {
+NameTableMirroring Mapper::GetNameTableMirroring() {
     return static_cast<NameTableMirroring>(m_cartridge.GetNameTableMirroring());
 }
 
