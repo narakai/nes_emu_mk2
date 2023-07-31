@@ -31,7 +31,7 @@ void VirtualScreen::Create(unsigned int width, unsigned int height, float pixel_
             // 将一个二维数组的元素转换为一维数组中的索引，从而在一维数组中存储和处理二维数组的数据
             // x * m_screenSize.y 计算出当前行的起始位置在一维数组中的索引
             // x * m_screenSize.y + y 计算出当前元素在一维数组中的索引
-            auto index = (x * m_screenSize.y + y);
+            auto index = (x * m_screenSize.y + y) * 6;
             // float 型 二元组
             sf::Vector2f coord2d(x * m_pixelSize, y * m_pixelSize);
 
