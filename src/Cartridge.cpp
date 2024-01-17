@@ -37,7 +37,10 @@
 //
 //Flags6的高四位记录了mapper number的低四位，Flags7的高四位记录了mapper number的高四位。
 
-Cartridge::Cartridge() {
+Cartridge::Cartridge() :
+        m_nameTableMirroring(0),
+        m_mapperNumber(0),
+        m_extendedRAM(false) {
 
 }
 

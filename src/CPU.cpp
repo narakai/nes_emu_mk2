@@ -61,23 +61,48 @@ void CPU::Reset(Address start_addr) {
     r_SP = 0xfd; //documented startup state
 }
 
+void CPU::SkipDMACycles() {
+    m_skipCycles += 513; //256 read + 256 write + 1 dummy read
+    m_skipCycles += (m_cycles & 1); //+1 if on odd cycle
+}
+
 void CPU::Step() {
     ++m_cycles;
 
-    if (m_skipCycles-- > 1) {
-        //m_skipCycles大于1直接减1返回
+    if (m_skipCycles-- > 1)
         return;
-    }
 
     m_skipCycles = 0;
-
-    Byte opcode = m_bus.Read(r_PC++);
+    /* 生成程序状态字 */
+    /*
+    int psw =   f_N << 7 |
+                f_V << 6 |
+                  1 << 5 |
+                f_D << 3 |
+                f_I << 2 |
+                f_Z << 1 |
+                f_C;
+    */
+    static Byte opcode = 0;
+    static Byte lastOpcode = opcode;
+    opcode = m_bus.Read(r_PC++);
     auto CycleLength = OperationCycles[opcode];
+//    if (lastOpcode != opcode) {
+//        LOG(Info) << "CPU Step, PC is 0x"
+//                  << std::hex
+//                  << static_cast<int>(GetPC())
+//                  << "\t opcode is:"
+//                  << std::hex
+//                  << static_cast<int>(opcode)
+//                  << "\t CycleLength is " << CycleLength
+//                  << std::endl;
+//    }
+
     if (CycleLength && (ExecuteImplied(opcode) || ExecuteBranch(opcode) ||
-                        ExecuteType0(opcode) || ExecuteType1(opcode) || ExecuteType2(opcode))) {
+                        ExecuteType1(opcode) || ExecuteType2(opcode) || ExecuteType0(opcode))) {
         m_skipCycles += CycleLength;
     } else {
-        LOG(Error) << "Unrecognized opcode: " << std::hex << +opcode << std::endl;
+        // LOG(Error) << "Unrecognized opcode: " << std::hex << +opcode << std::endl;
     }
 }
 
@@ -92,6 +117,44 @@ Byte CPU::PullStack() {
     Byte value = m_bus.Read(0x100 | r_SP);
     ++r_SP;
     return value;
+}
+
+void CPU::Interrupt(InterruptType type) {
+    if (f_I && type != NMI && type != BRK_)
+        return;
+
+    if (type == BRK_) //Add one if BRK, a quirk of 6502
+        ++r_PC;
+
+    // 保存 PC 值
+    PushStack(r_PC >> 8);
+    PushStack(r_PC);
+
+    Byte flags = f_N << 7 |
+                 f_V << 6 |
+                 1 << 5 | //unused bit, supposed to be always 1
+                 (type == BRK_) << 4 | //B flag set if BRK
+                 f_D << 3 |
+                 f_I << 2 |
+                 f_Z << 1 |
+                 f_C;
+    // 保存状态
+    PushStack(flags);
+
+    f_I = true;
+
+    switch (type) {
+        case IRQ:
+        case BRK_:
+            // 中断向量
+            r_PC = ReadAddress(IRQVector);
+            break;
+        case NMI:
+            r_PC = ReadAddress(NMIVector);
+            break;
+    }
+
+    m_skipCycles += 7;
 }
 
 bool CPU::ExecuteImplied(Byte opcode) {
@@ -289,15 +352,15 @@ bool CPU::ExecuteBranch(Byte opcode) {
             default:
                 return false;
         }
+
         if (branch) {
             int8_t offset = m_bus.Read(r_PC++);
             ++m_skipCycles;
             auto newPC = static_cast<Address>(r_PC + offset);
             SetPageCrossed(r_PC, newPC, 2);
             r_PC = newPC;
-        } else {
+        } else
             ++r_PC;
-        }
         return true;
     }
     return false;

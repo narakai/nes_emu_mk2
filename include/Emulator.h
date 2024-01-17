@@ -12,6 +12,8 @@
 #include <SFML/Graphics.hpp>
 #include <VirtualScreen.h>
 #include <PPU.h>
+#include <chrono>
+#include <PictureBus.h>
 
 
 const int NESVideoWidth = ScanlineVisibleDots;
@@ -32,6 +34,15 @@ private:
     VirtualScreen m_emulatorScreen;
     // 控制屏幕缩放
     float m_screenScale;
+
+    void DMA(Byte page);
+    PPU m_ppu;
+    PictureBus m_pictureBus;
+
+    // 计时
+    std::chrono::high_resolution_clock::time_point m_cycleTimer;
+    std::chrono::high_resolution_clock::duration m_elapsedTime;
+    std::chrono::nanoseconds m_cpuCycleDuration;
 };
 
 
