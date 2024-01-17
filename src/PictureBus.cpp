@@ -40,6 +40,8 @@
 
 */
 
+//https://www.jianshu.com/p/c5b02614e4a7
+
 PictureBus::PictureBus() : m_RAM(0x800),
                            m_palette(0x20),
                            m_mapper(nullptr) {}
